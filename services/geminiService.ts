@@ -8,6 +8,31 @@ function btoa_utf8(str: string) {
 const textModel = 'gemini-2.5-flash';
 const imageModel = 'gemini-2.5-flash-image';
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function generateImageWithRetry(ai: GoogleGenAI, prompt: string, retries = 3): Promise<any> {
+    try {
+        return await ai.models.generateContent({
+            model: imageModel,
+            contents: prompt,
+            config: { imageConfig: { aspectRatio: "16:9" } } as any
+        });
+    } catch (error: any) {
+        const isQuotaError = error.message?.includes('429') || 
+                             error.code === 429 || 
+                             error.status === 429 || 
+                             error.message?.includes('Quota exceeded') ||
+                             error.message?.includes('RESOURCE_EXHAUSTED');
+        
+        if (isQuotaError && retries > 0) {
+            console.warn(`Rate limit hit. Retrying in 10s... (${retries} retries left)`);
+            await delay(10000); // Wait 10 seconds before retry
+            return generateImageWithRetry(ai, prompt, retries - 1);
+        }
+        throw error;
+    }
+}
+
 export const generateAffiliatePost = async (
   productName: string,
   productDescription: string,
@@ -79,16 +104,19 @@ export const generateAffiliatePost = async (
     const generatedContent = JSON.parse(contentGenerationResponse.text);
     const { htmlBodyContent, imagePrompts } = generatedContent;
 
-    onProgress(2, 'Creating 3 professional images...');
+    onProgress(2, 'Creating 3 professional images (sequentially to avoid rate limits)...');
 
-    const imagePromises = [
-      ai.models.generateContent({model: imageModel, contents: imagePrompts.hero, config: { imageConfig: { aspectRatio: "16:9" } } as any}),
-      ai.models.generateContent({model: imageModel, contents: imagePrompts.features, config: { imageConfig: { aspectRatio: "16:9" } } as any}),
-      ai.models.generateContent({model: imageModel, contents: imagePrompts.ctaBanner, config: { imageConfig: { aspectRatio: "16:9" } } as any})
-    ];
+    // Sequential generation with retry logic to handle 429 errors
+    const imageResponses = [];
+    const prompts = [imagePrompts.hero, imagePrompts.features, imagePrompts.ctaBanner];
     
-    // Process image responses sequentially or via Promise.all, but handle errors gracefully
-    const imageResponses = await Promise.all(imagePromises);
+    for (let i = 0; i < prompts.length; i++) {
+        // Add a delay between requests to be gentle on the API
+        if (i > 0) await delay(3000); 
+        const response = await generateImageWithRetry(ai, prompts[i]);
+        imageResponses.push(response);
+    }
+    
     const base64Images = imageResponses.map(res => {
         if (!res.candidates || !res.candidates[0] || !res.candidates[0].content || !res.candidates[0].content.parts) {
             throw new Error("Invalid response structure from image generation.");
@@ -152,8 +180,11 @@ export const generateAffiliatePost = async (
     let errorMessage = "An unknown error occurred during generation.";
     if (error instanceof Error) {
         errorMessage = error.message;
-        if (errorMessage.includes("NetworkError") || errorMessage.includes("Failed to fetch")) {
-            errorMessage = "Network Error: Unable to connect to Google Gemini API. Please ensure your API key is correct and valid, and that you are not blocked by a firewall or CORS restrictions.";
+        // Check for Quota/Rate Limit explicitly
+        if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
+             errorMessage = "API Rate Limit Exceeded. The system will retry automatically, but if this persists, please try again in a few minutes.";
+        } else if (errorMessage.includes("NetworkError") || errorMessage.includes("Failed to fetch")) {
+            errorMessage = "Network Error: Unable to connect to Google Gemini API. Please ensure your API key is correct and valid.";
         }
     }
     
