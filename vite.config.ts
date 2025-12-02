@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
     },
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      // Ensure it's always a string, falling back to empty string if undefined
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     }
   }
 })
