@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
 import { usePosts } from '../context/PostsContext';
 import { GeneratedPost } from '../types';
 import { EyeIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
-
-declare var JSZip: any;
-declare var saveAs: any;
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const PreviewModal: React.FC<{ htmlContent: string; onClose: () => void }> = ({ htmlContent, onClose }) => {
   return (
