@@ -25,8 +25,8 @@ async function generateImageWithRetry(ai: GoogleGenAI, prompt: string, retries =
                              error.message?.includes('RESOURCE_EXHAUSTED');
         
         if (isQuotaError && retries > 0) {
-            console.warn(`Rate limit hit. Retrying in 10s... (${retries} retries left)`);
-            await delay(10000); // Wait 10 seconds before retry
+            console.warn(`Rate limit hit. Retrying in 30s... (${retries} retries left)`);
+            await delay(30000); // Wait 30 seconds before retry for strict limits
             return generateImageWithRetry(ai, prompt, retries - 1);
         }
         throw error;
@@ -45,12 +45,22 @@ export const generateAffiliatePost = async (
     
     if (!apiKey) {
         console.error("API Key is missing. Please check your environment variables.");
-        throw new Error("API Key is missing. Please set the API_KEY environment variable in your deployment settings.");
+        throw new Error("API Key is not configured. Please set the API_KEY environment variable in your Vercel project settings.");
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
   try {
+    // 1. Pre-flight check for API key validity
+    onProgress(0, 'Validating API key...');
+    try {
+        await ai.models.countTokens({model: textModel, contents: 'test'});
+    } catch(err) {
+        console.error("API Key validation failed:", err);
+        throw new Error("API Key Validation Failed. Please ensure your API_KEY environment variable is set correctly in your Vercel project. The key might be invalid, expired, or lack necessary permissions.");
+    }
+
+
     onProgress(1, 'Generating high-converting copy...');
     
     const ctaButtonHtml = `<a href="${affiliateHoplink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #22c55e; color: white; padding: 15px 30px; font-size: 20px; font-weight: bold; text-decoration: none; border-radius: 8px; text-align: center; transition: background-color 0.3s ease;">Click Here to Get Instant Access!</a>`;
@@ -104,15 +114,14 @@ export const generateAffiliatePost = async (
     const generatedContent = JSON.parse(contentGenerationResponse.text);
     const { htmlBodyContent, imagePrompts } = generatedContent;
 
-    onProgress(2, 'Creating 3 professional images (sequentially to avoid rate limits)...');
+    onProgress(2, 'Creating 3 images (this may take a minute due to rate limits)...');
 
-    // Sequential generation with retry logic to handle 429 errors
     const imageResponses = [];
     const prompts = [imagePrompts.hero, imagePrompts.features, imagePrompts.ctaBanner];
     
     for (let i = 0; i < prompts.length; i++) {
-        // Add a delay between requests to be gentle on the API
-        if (i > 0) await delay(3000); 
+        // Ultra-conservative delay to avoid free tier rate limits.
+        if (i > 0) await delay(20000); 
         const response = await generateImageWithRetry(ai, prompts[i]);
         imageResponses.push(response);
     }
@@ -180,11 +189,8 @@ export const generateAffiliatePost = async (
     let errorMessage = "An unknown error occurred during generation.";
     if (error instanceof Error) {
         errorMessage = error.message;
-        // Check for Quota/Rate Limit explicitly
         if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-             errorMessage = "API Rate Limit Exceeded. The system will retry automatically, but if this persists, please try again in a few minutes.";
-        } else if (errorMessage.includes("NetworkError") || errorMessage.includes("Failed to fetch")) {
-            errorMessage = "Network Error: Unable to connect to Google Gemini API. Please ensure your API key is correct and valid.";
+             errorMessage = "Free Tier Rate Limit Exceeded. To avoid this, generation is slowed down automatically. If this error persists, please wait a few minutes before trying again or consider upgrading your Google AI Studio plan for higher limits.";
         }
     }
     
