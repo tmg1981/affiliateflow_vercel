@@ -45,7 +45,7 @@ export const generateAffiliatePost = async (
     
     if (!apiKey) {
         console.error("API Key is missing. Please check your environment variables.");
-        throw new Error("API Key is not configured. Please set the API_KEY environment variable in your Vercel project settings.");
+        throw new Error("API Key is not configured. Please go to the Settings page for instructions on how to set it up in your Vercel project.");
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -57,7 +57,7 @@ export const generateAffiliatePost = async (
         await ai.models.countTokens({model: textModel, contents: 'test'});
     } catch(err) {
         console.error("API Key validation failed:", err);
-        throw new Error("API Key Validation Failed. Please ensure your API_KEY environment variable is set correctly in your Vercel project. The key might be invalid, expired, or lack necessary permissions.");
+        throw new Error("API Key Validation Failed. Go to the Settings page and use the 'Check API Key Status' tool for more details. Your key might be invalid, or your project may lack billing.");
     }
 
 
