@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { HomeIcon, PlusCircleIcon, DocumentTextIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, PlusCircleIcon, DocumentTextIcon, Cog6ToothIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 
 const HeaderAsSidebar: React.FC = () => {
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -30,6 +29,10 @@ const HeaderAsSidebar: React.FC = () => {
         <NavLink to="/settings" className={navLinkClass}>
           <Cog6ToothIcon className="h-5 w-5 mr-3" />
           Settings
+        </NavLink>
+         <NavLink to="/guide" className={navLinkClass}>
+          <QuestionMarkCircleIcon className="h-5 w-5 mr-3" />
+          Guide
         </NavLink>
       </nav>
       <div className="p-4 border-t border-gray-700 text-center text-xs text-gray-500">
