@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 
 interface SettingsContextType {
   apiKey: string | null;
@@ -10,12 +9,25 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const GenerateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // FIX: All logic for API key management removed as per guidelines.
-  // The API key is now expected to be in process.env.API_KEY.
+  const [apiKey, setApiKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load API key from localStorage on initial render
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
+
+  const saveApiKey = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
+
   const value: SettingsContextType = {
-    apiKey: null, // No longer sourced from UI
-    saveApiKey: () => {}, // No-op
-    isKeySet: true, // Assume key is set via environment variables
+    apiKey,
+    saveApiKey,
+    isKeySet: !!apiKey,
   };
 
   return (
