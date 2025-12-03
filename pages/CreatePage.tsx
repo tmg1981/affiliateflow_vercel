@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { usePosts } from '../context/PostsContext';
+import { useSettings } from '../components/GenerateProvider';
 import { generateAffiliatePost } from '../services/geminiService';
 import { TEMPLATE_STYLES, DEFAULT_HOPLINK } from '../constants';
 import { GenerationResult } from '../types';
@@ -30,7 +31,7 @@ const CreatePage: React.FC = () => {
   const [generatedData, setGeneratedData] = useState<GenerationResult | null>(null);
   
   const { addPost } = usePosts();
-  // FIX: Removed useSettings as API key is now handled by environment variables.
+  const { apiKey, isKeySet } = useSettings();
   const templateSelectRef = useRef<HTMLSelectElement>(null);
 
   function atob_utf8(b64: string) {
@@ -48,12 +49,17 @@ const CreatePage: React.FC = () => {
       setError('Product Name and Description are required.');
       return;
     }
+    
+    if (!isKeySet || !apiKey) {
+      setError('API Key is not set. Please go to the Settings page to add your API key.');
+      return;
+    }
+
     setError(null);
     setGeneratedData(null);
 
     try {
-      // FIX: Updated call to generateAffiliatePost to remove the apiKey argument.
-      const result = await generateAffiliatePost(productName, productDescription, affiliateHoplink, templateStyle, handleProgress);
+      const result = await generateAffiliatePost(productName, productDescription, affiliateHoplink, templateStyle, handleProgress, apiKey);
       const newPost = {
         id: new Date().toISOString(),
         templateName: result.templateName,
