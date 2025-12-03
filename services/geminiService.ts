@@ -38,14 +38,13 @@ export const generateAffiliatePost = async (
   productDescription: string,
   affiliateHoplink: string,
   templateName: string,
-  onProgress: (step: number, message: string) => void
+  onProgress: (step: number, message: string) => void,
+  apiKey: string
 ): Promise<GenerationResult> => {
     
-    const apiKey = process.env.API_KEY;
-    
     if (!apiKey) {
-        console.error("API Key is missing. Please check your environment variables.");
-        throw new Error("API Key is not configured. Please go to the Settings page for instructions on how to set it up in your Vercel project.");
+        console.error("API Key is missing.");
+        throw new Error("API Key is not configured. Please go to the Settings page to enter your API key.");
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
