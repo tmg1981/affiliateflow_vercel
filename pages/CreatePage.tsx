@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { usePosts } from '../context/PostsContext';
 import { useSettings } from '../components/GenerateProvider';
 import { generateAffiliatePost } from '../services/geminiService';
@@ -28,6 +29,7 @@ const CreatePage: React.FC = () => {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isRateLimitError, setIsRateLimitError] = useState(false);
   const [generatedData, setGeneratedData] = useState<GenerationResult | null>(null);
   
   const { addPost } = usePosts();
@@ -56,6 +58,7 @@ const CreatePage: React.FC = () => {
     }
 
     setError(null);
+    setIsRateLimitError(false);
     setGeneratedData(null);
 
     try {
@@ -72,7 +75,11 @@ const CreatePage: React.FC = () => {
       setGeneratedData(result);
       setGenerationProgress(0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setError(errorMessage);
+      if (errorMessage.includes("Persistent API Rate Limit Error")) {
+        setIsRateLimitError(true);
+      }
       setGenerationProgress(0);
     }
   };
@@ -108,7 +115,18 @@ const CreatePage: React.FC = () => {
               {TEMPLATE_STYLES.map(style => <option key={style} value={style}>{style}</option>)}
             </select>
           </div>
-          {error && <div className="text-red-400 text-sm p-3 bg-red-900/50 rounded-md">{error}</div>}
+          {error && (
+            <div className="text-red-400 text-sm p-3 bg-red-900/50 rounded-md">
+              <p>{error}</p>
+              {isRateLimitError && (
+                <p className="mt-2">
+                  <Link to="/guide" className="font-bold underline text-teal-400 hover:text-teal-300">
+                    برای راه حل قطعی اینجا کلیک کنید (صفحه راهنما)
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <button type="submit" disabled={generationProgress > 0} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-gray-500 disabled:cursor-not-allowed">
               Generate with AI
