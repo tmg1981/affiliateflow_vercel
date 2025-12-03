@@ -61,24 +61,25 @@ export const generateAffiliatePost = async (
     }
 
 
-    onProgress(1, 'Generating high-converting copy...');
+    onProgress(1, 'Generating high-converting copy & SEO...');
     
     const ctaButtonHtml = `<a href="${affiliateHoplink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #22c55e; color: white; padding: 15px 30px; font-size: 20px; font-weight: bold; text-decoration: none; border-radius: 8px; text-align: center; transition: background-color 0.3s ease;">Click Here to Get Instant Access!</a>`;
 
     const contentPrompt = `
       You are an expert direct response copywriter and SEO specialist.
-      Generate a complete, high-converting affiliate marketing landing page HTML content.
+      Generate a complete, high-converting affiliate marketing landing page content.
       Product: "${productName}"
       Description: "${productDescription}"
       Template Style: "${templateName}"
-      Your response MUST be a JSON object with two keys: "htmlBodyContent" and "imagePrompts".
-      "htmlBodyContent" requirements:
-      - A single string of HTML for the <body>. Do NOT include <html>, <head>, or <body> tags.
-      - Insert placeholders: "[HERO_IMAGE]", "[FEATURES_IMAGE]", and "[CTA_BANNER_IMAGE]".
-      - Insert the placeholder: "[CTA_BUTTON]".
-      "imagePrompts" requirements:
-      - A JSON object with three keys: "hero", "features", and "ctaBanner".
-      - Values must be descriptive prompts for generating visually stunning, relevant images (16:9 aspect ratio).
+      Your response MUST be a JSON object with four keys: "title", "metaDescription", "htmlBodyContent", and "imagePrompts".
+      
+      "title": A compelling, SEO-friendly title for the page.
+      "metaDescription": An engaging meta description for search results.
+      "htmlBodyContent": A single string of HTML for the <body>. Do NOT include <html>, <head>, or <body> tags.
+        - Insert placeholders: "[HERO_IMAGE]", "[FEATURES_IMAGE]", and "[CTA_BANNER_IMAGE]".
+        - Insert the placeholder: "[CTA_BUTTON]".
+      "imagePrompts": A JSON object with three keys: "hero", "features", and "ctaBanner".
+        - Values must be descriptive prompts for generating visually stunning, relevant images (16:9 aspect ratio).
     `;
 
     const contentGenerationResponse = await ai.models.generateContent({
@@ -89,6 +90,8 @@ export const generateAffiliatePost = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            title: { type: Type.STRING },
+            metaDescription: { type: Type.STRING },
             htmlBodyContent: {
               type: Type.STRING,
             },
@@ -102,7 +105,7 @@ export const generateAffiliatePost = async (
               required: ["hero", "features", "ctaBanner"],
             },
           },
-          required: ["htmlBodyContent", "imagePrompts"],
+          required: ["title", "metaDescription", "htmlBodyContent", "imagePrompts"],
         }
       }
     });
@@ -112,18 +115,21 @@ export const generateAffiliatePost = async (
     }
 
     const generatedContent = JSON.parse(contentGenerationResponse.text);
-    const { htmlBodyContent, imagePrompts } = generatedContent;
+    const { title, metaDescription, htmlBodyContent, imagePrompts } = generatedContent;
 
-    onProgress(2, 'Creating 3 images (this may take a minute due to rate limits)...');
+    onProgress(2, 'Creating 3 images. This is the slowest step due to API limits...');
 
     const imageResponses = [];
     const prompts = [imagePrompts.hero, imagePrompts.features, imagePrompts.ctaBanner];
     
     for (let i = 0; i < prompts.length; i++) {
-        // Ultra-conservative delay to avoid free tier rate limits.
-        if (i > 0) await delay(20000); 
+        onProgress(2, `Generating image ${i + 1} of 3...`);
         const response = await generateImageWithRetry(ai, prompts[i]);
         imageResponses.push(response);
+        if (i < prompts.length - 1) {
+            onProgress(2, `Waiting 61 seconds to avoid rate limits...`);
+            await delay(61000); // Drastically increased delay
+        }
     }
     
     const base64Images = imageResponses.map(res => {
@@ -138,43 +144,16 @@ export const generateAffiliatePost = async (
         throw new Error("Image data not found in response part");
     });
 
-    onProgress(3, 'Building HTML & CSS...');
+    onProgress(3, 'Assembling the final page...');
 
-    const seoPrompt = `
-      Based on the product "${productName}", create SEO metadata.
-      Your response MUST be a valid JSON object with two keys: "title" and "metaDescription".
-    `;
-    
-    const seoResponse = await ai.models.generateContent({
-        model: textModel,
-        contents: seoPrompt,
-        config: { 
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING },
-                    metaDescription: { type: Type.STRING },
-                },
-                required: ["title", "metaDescription"],
-            },
-        }
-    });
-    
-    if (!seoResponse.text) {
-         throw new Error("No text returned from SEO generation.");
-    }
-
-    const seoData = JSON.parse(seoResponse.text);
-
-    let finalHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${seoData.title}</title><meta name="description" content="${seoData.metaDescription}"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 text-gray-800 font-sans"><div class="container mx-auto p-4 md:p-8">${htmlBodyContent}</div></body></html>`;
+    let finalHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><meta name="description" content="${metaDescription}"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 text-gray-800 font-sans"><div class="container mx-auto p-4 md:p-8">${htmlBodyContent}</div></body></html>`;
     finalHtml = finalHtml.replace('[HERO_IMAGE]', `<img src="images/hero.png" alt="Hero image for ${productName}" class="w-full h-auto rounded-lg shadow-lg mb-8">`);
     finalHtml = finalHtml.replace('[FEATURES_IMAGE]', `<img src="images/features.png" alt="Features of ${productName}" class="w-full h-auto rounded-lg shadow-md my-8">`);
     finalHtml = finalHtml.replace('[CTA_BANNER_IMAGE]', `<img src="images/cta_banner.png" alt="Call to action banner" class="w-full h-auto rounded-lg shadow-md my-8">`);
     finalHtml = finalHtml.replace(/\[CTA_BUTTON\]/g, `<div class="text-center my-12">${ctaButtonHtml}</div>`);
     
     const previewHtmlBase64 = btoa_utf8(finalHtml);
-    onProgress(4, 'Ready! Download below.');
+    onProgress(4, 'Success! Your post is ready.');
     
     return {
       templateName: templateName,
@@ -190,7 +169,7 @@ export const generateAffiliatePost = async (
     if (error instanceof Error) {
         errorMessage = error.message;
         if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-             errorMessage = "Free Tier Rate Limit Exceeded. To avoid this, generation is slowed down automatically. If this error persists, please wait a few minutes before trying again or consider upgrading your Google AI Studio plan for higher limits.";
+             errorMessage = "Persistent API Rate Limit Error. This usually happens on the free tier, even with low traffic. The most common solution is to enable billing on your Google Cloud project. You will still benefit from the free usage tier, but your rate limits will be significantly higher. Please go to the Google Cloud Console, select your project, and add a billing account.";
         }
     }
     
